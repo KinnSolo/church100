@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Souls Winning Monitor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Church Souls Winning & Attendance Monitor</h1>
+            <p>October 2025 - March 2026 | Goal: 100 Members</p>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="showSheet('main-entry')">Main Entry</button>
+            <button class="tab-button" onclick="showSheet('sunday-report')">Sunday Report</button>
+            <button class="tab-button" onclick="showSheet('follow-up')">Follow-Up Tracker</button>
+            <button class="tab-button" onclick="showSheet('monthly-summary')">Monthly Summary</button>
+            <button class="tab-button" onclick="showSheet('dashboard')">Dashboard</button>
+        </div>
+
+        <!-- MAIN ENTRY SHEET -->
+        <div id="main-entry" class="sheet active">
+            <div class="card">
+                <h2>📋 Main Entry - Add New Members</h2>
+                <div class="form-grid">
+                    <input type="text" id="memberName" placeholder="Full Name" class="input">
+                    <input type="tel" id="memberPhone" placeholder="Telephone" class="input">
+                </div>
+                <button onclick="addMember()" class="btn btn-primary">Add Member</button>
+            </div>
+
+            <div class="card">
+                <h3>Members List</h3>
+
+                <!-- 🔍 Search Box -->
+                <input 
+                    type="text" 
+                    id="memberSearch" 
+                    placeholder="🔍 Search by name, phone or team..." 
+                    class="search-box"
+                    onkeyup="filterMembers()"
+                >
+
+                <div class="table-container">
+                    <table id="membersTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Telephone</th>
+                                <th>Team</th>
+                                <th>Times Attended</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="membersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUNDAY REPORT SHEET -->
+        <div id="sunday-report" class="sheet">
+            <div class="card">
+                <h2>📅 Sunday Report - Record Attendance</h2>
+                <div class="form-grid">
+                    <input type="date" id="attendanceDate" class="input">
+                    <select id="attendanceMember" class="input">
+                        <option value="">Select Member</option>
+                    </select>
+                    <select id="visitorMember" class="input">
+                        <option value="Member">Member</option>
+                        <option value="Visitor">Visitor</option>
+                    </select>
+                </div>
+                <button onclick="recordAttendance()" class="btn btn-success">Record Attendance</button>
+            </div>
+
+            <div class="card">
+                <h3>Attendance Records</h3>
+                <div class="table-container">
+                    <table id="attendanceTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Name</th>
+                                <th>Telephone</th>
+                                <th>Team</th>
+                                <th>Type</th>
+                                <th>Times Attended</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOLLOW-UP TRACKER -->
+        <div id="follow-up" class="sheet">
+            <div class="card">
+                <h2>☎️ Follow-Up Tracker</h2>
+                <div class="alert-info">
+                    <strong>Today is <span id="todayDay"></span></strong>
+                    <p>Highlighted rows show today's follow-ups</p>
+                </div>
+                <div class="table-container">
+                    <table id="followUpTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Telephone</th>
+                                <th>Team</th>
+                                <th>Call Day</th>
+                                <th>Visit Day</th>
+                                <th>Visit Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="followUpTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- MONTHLY SUMMARY -->
+        <div id="monthly-summary" class="sheet">
+            <div class="card">
+                <h2>📈 Monthly Summary</h2>
+                <div class="table-container">
+                    <table id="summaryTable">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Total Souls Won</th>
+                                <th>Visitors</th>
+                                <th>Total Attendance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summaryTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div id="dashboard" class="sheet">
+            <div class="dashboard-grid">
+                <div class="stat-card blue">
+                    <div class="stat-content">
+                        <div>
+                            <p class="stat-label">Total Members</p>
+                            <p class="stat-value" id="totalMembers">0</p>
+                        </div>
+                        <div class="stat-icon">👥</div>
+                    </div>
+                </div>
+
+                <div class="stat-card green">
+                    <div class="stat-content">
+                        <div>
+                            <p class="stat-label">Goal Progress</p>
+                            <p class="stat-value" id="goalProgress">0%</p>
+                        </div>
+                        <div class="stat-icon">📈</div>
+                    </div>
+                </div>
+
+                <div class="stat-card purple">
+                    <div class="stat-content">
+                        <div>
+                            <p class="stat-label">Total Visitors</p>
+                            <p class="stat-value" id="totalVisitors">0</p>
+                        </div>
+                        <div class="stat-icon">🎯</div>
+                    </div>
+                </div>
+
+                <div class="stat-card orange">
+                    <div class="stat-content">
+                        <div>
+                            <p class="stat-label">Total Attendance</p>
+                            <p class="stat-value" id="totalAttendance">0</p>
+                        </div>
+                        <div class="stat-icon">📊</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Progress to 100 Members Goal</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">
+                        <span id="progressText">0 / 100</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Team Contributions</h3>
+                <div class="team-grid">
+                    <div class="team-card">
+                        <p class="team-name">Team A</p>
+                        <p class="team-count" id="teamACount">0</p>
+                        <p class="team-label">members</p>
+                    </div>
+                    <div class="team-card">
+                        <p class="team-name">Team B</p>
+                        <p class="team-count" id="teamBCount">0</p>
+                        <p class="team-label">members</p>
+                    </div>
+                    <div class="team-card">
+                        <p class="team-name">Team C</p>
+                        <p class="team-count" id="teamCCount">0</p>
+                        <p class="team-label">members</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QUICK GUIDE -->
+        <div class="guide">
+            <p><strong>📌 Quick Guide:</strong></p>
+            <ul>
+                <li><strong>Main Entry:</strong> Add new members - team assignment is automatic</li>
+                <li><strong>Sunday Report:</strong> Record weekly attendance</li>
+                <li><strong>Follow-Up Tracker:</strong> Today's follow-ups are highlighted in blue</li>
+                <li><strong>Monthly Summary:</strong> View statistics by month</li>
+                <li><strong>Dashboard:</strong> Visual overview of all activities</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
