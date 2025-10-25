@@ -1,70 +1,20 @@
-// Firebase Configuration - YOU NEED TO REPLACE THIS WITH YOUR OWN CONFIG
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyA_v3yOWF4Zc7C_kSFWkaLQn_P4iuffwA4",
-  authDomain: "church-attendance-tracke-8db11.firebaseapp.com",
-  databaseURL: "https://church-attendance-tracke-8db11-default-rtdb.firebaseio.com",
-  projectId: "church-attendance-tracke-8db11",
-  storageBucket: "church-attendance-tracke-8db11.firebasestorage.app",
-  messagingSenderId: "414483642057",
-  appId: "1:414483642057:web:b48f0b87e47b06c26aff18",
-  measurementId: "G-E18X1TR91L"
-};
+// Google Sheets Configuration
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxki5vlPmNEGIkCSL5VW8MNp1mueEETVl9EVcgY7mZBghVvjii2nbgZjVMjDTf6iriC/exec'; 
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-
-// Data Storage References
+// Data Storage
 let members = [];
 let attendanceRecords = [];
 let followUpRecords = [];
-let visitLogs = [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
-    loadDataFromFirebase();
+    loadDataFromSheets();
     updateTodayDay();
     
-    // Set default date to today
     const today = new Date().toISOString().split('T')[0];
     const dateInput = document.getElementById('attendanceDate');
     if (dateInput) dateInput.value = today;
 });
-
-// Load data from Firebase
-function loadDataFromFirebase() {
-    // Load Members
-    database.ref('members').on('value', (snapshot) => {
-        members = [];
-        snapshot.forEach((childSnapshot) => {
-            members.push(childSnapshot.val());
-        });
-        renderMembersTable();
-        populateMemberDropdown();
-        updateDashboard();
-    });
-
-    // Load Attendance Records
-    database.ref('attendance').on('value', (snapshot) => {
-        attendanceRecords = [];
-        snapshot.forEach((childSnapshot) => {
-            attendanceRecords.push(childSnapshot.val());
-        });
-        renderAttendanceTable();
-        renderMonthlySummary();
-        updateDashboard();
-    });
-
-    // Load Follow-Up Records
-    database.ref('followUp').on('value', (snapshot) => {
-        followUpRecords = [];
-        snapshot.forEach((childSnapshot) => {
-            followUpRecords.push(childSnapshot.val());
-        });
-        renderFollowUpTable();
-    });
-}
 
 // Show sheet
 function showSheet(sheetId) {
@@ -84,8 +34,53 @@ function showSheet(sheetId) {
     if (sheetId === 'dashboard') updateDashboard();
 }
 
+// ===== LOAD DATA FROM GOOGLE SHEETS =====
+async function loadDataFromSheets() {
+    await loadMembers();
+    await loadAttendance();
+    await loadFollowUp();
+}
+
+async function loadMembers() {
+    try {
+        const response = await fetch(SHEETS_URL + '?action=getMembers');
+        members = await response.json();
+        members = members.filter(m => m.id); // Filter out empty rows
+        renderMembersTable();
+        populateMemberDropdown();
+        updateDashboard();
+    } catch (error) {
+        console.error('Error loading members:', error);
+        alert('Error loading members. Please check your internet connection.');
+    }
+}
+
+async function loadAttendance() {
+    try {
+        const response = await fetch(SHEETS_URL + '?action=getAttendance');
+        attendanceRecords = await response.json();
+        attendanceRecords = attendanceRecords.filter(a => a.id); // Filter out empty rows
+        renderAttendanceTable();
+        renderMonthlySummary();
+        updateDashboard();
+    } catch (error) {
+        console.error('Error loading attendance:', error);
+    }
+}
+
+async function loadFollowUp() {
+    try {
+        const response = await fetch(SHEETS_URL + '?action=getFollowUp');
+        followUpRecords = await response.json();
+        followUpRecords = followUpRecords.filter(f => f.id); // Filter out empty rows
+        renderFollowUpTable();
+    } catch (error) {
+        console.error('Error loading follow-up:', error);
+    }
+}
+
 // ===== ADD MEMBER =====
-function addMember() {
+async function addMember() {
     const name = document.getElementById('memberName').value.trim();
     const phone = document.getElementById('memberPhone').value.trim();
     
@@ -104,27 +99,29 @@ function addMember() {
         dateAdded: new Date().toISOString() 
     };
     
-    // Save to Firebase
-    database.ref('members/' + memberId).set(member)
-        .then(() => {
-            createFollowUpRecord(member);
-            document.getElementById('memberName').value = '';
-            document.getElementById('memberPhone').value = '';
-            alert('Member added successfully!');
-        })
-        .catch((error) => {
-            alert('Error adding member: ' + error.message);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'addMember', member })
         });
+        
+        await createFollowUpRecord(member);
+        await loadMembers();
+        
+        document.getElementById('memberName').value = '';
+        document.getElementById('memberPhone').value = '';
+        alert('Member added successfully!');
+    } catch (error) {
+        alert('Error adding member: ' + error.message);
+    }
 }
 
-// Assign random team
 function assignTeam() {
     const teams = ['Team A', 'Team B', 'Team C'];
     return teams[Math.floor(Math.random() * teams.length)];
 }
 
-// Create follow-up
-function createFollowUpRecord(member) {
+async function createFollowUpRecord(member) {
     const callDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const visitDays = ['Wednesday', 'Thursday', 'Saturday'];
     const followUp = {
@@ -138,14 +135,19 @@ function createFollowUpRecord(member) {
         status: 'Pending'
     };
     
-    database.ref('followUp/' + member.id).set(followUp)
-        .catch((error) => {
-            console.error('Error creating follow-up:', error);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'addFollowUp', followUp })
         });
+        await loadFollowUp();
+    } catch (error) {
+        console.error('Error creating follow-up:', error);
+    }
 }
 
 // ===== RECORD ATTENDANCE =====
-function recordAttendance() {
+async function recordAttendance() {
     const date = document.getElementById('attendanceDate').value;
     const memberName = document.getElementById('attendanceMember').value;
     const type = document.getElementById('visitorMember').value;
@@ -172,54 +174,81 @@ function recordAttendance() {
         memberId: member.id
     };
     
-    database.ref('attendance/' + recordId).set(record)
-        .then(() => {
-            alert('Attendance recorded successfully!');
-        })
-        .catch((error) => {
-            alert('Error recording attendance: ' + error.message);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'addAttendance', record })
         });
+        
+        await loadAttendance();
+        alert('Attendance recorded successfully!');
+    } catch (error) {
+        alert('Error recording attendance: ' + error.message);
+    }
 }
 
 // ===== DELETE =====
-function deleteMember(id) {
+async function deleteMember(id) {
     if (!confirm('Delete this member?')) return;
     
-    database.ref('members/' + id).remove()
-        .then(() => {
-            database.ref('followUp/' + id).remove();
-            // Delete related attendance records
-            attendanceRecords.forEach(a => {
-                if (a.memberId === id) {
-                    database.ref('attendance/' + a.id).remove();
-                }
-            });
-        })
-        .catch((error) => {
-            alert('Error deleting member: ' + error.message);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'deleteMember', id })
         });
+        
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'deleteFollowUp', id })
+        });
+        
+        // Delete related attendance records
+        const relatedAttendance = attendanceRecords.filter(a => a.memberId === id);
+        for (const record of relatedAttendance) {
+            await fetch(SHEETS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'deleteAttendance', id: record.id })
+            });
+        }
+        
+        await loadMembers();
+        await loadAttendance();
+        await loadFollowUp();
+    } catch (error) {
+        alert('Error deleting member: ' + error.message);
+    }
 }
 
-function deleteAttendance(id) {
+async function deleteAttendance(id) {
     if (!confirm('Delete this attendance record?')) return;
     
-    database.ref('attendance/' + id).remove()
-        .catch((error) => {
-            alert('Error deleting attendance: ' + error.message);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'deleteAttendance', id })
         });
+        await loadAttendance();
+    } catch (error) {
+        alert('Error deleting attendance: ' + error.message);
+    }
 }
 
-function deleteFollowUp(id) {
+async function deleteFollowUp(id) {
     if (!confirm('Delete this follow-up record?')) return;
     
-    database.ref('followUp/' + id).remove()
-        .catch((error) => {
-            alert('Error deleting follow-up: ' + error.message);
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'deleteFollowUp', id })
         });
+        await loadFollowUp();
+    } catch (error) {
+        alert('Error deleting follow-up: ' + error.message);
+    }
 }
 
 // ===== EDIT =====
-function editMember(id) {
+async function editMember(id) {
     const m = members.find(x => x.id === id);
     if (!m) return;
     
@@ -235,30 +264,55 @@ function editMember(id) {
         phone: newPhone.trim()
     };
     
-    database.ref('members/' + id).set(updatedMember)
-        .then(() => {
-            // Update follow-up record
-            database.ref('followUp/' + id).update({
-                name: newName.trim(),
-                phone: newPhone.trim()
-            });
-            
-            // Update attendance records
-            attendanceRecords.forEach(a => {
-                if (a.name === oldName) {
-                    database.ref('attendance/' + a.id).update({
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'updateMember', id, member: updatedMember })
+        });
+        
+        // Update follow-up record
+        const followUp = followUpRecords.find(f => f.id === id);
+        if (followUp) {
+            await fetch(SHEETS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    action: 'updateFollowUp', 
+                    id, 
+                    followUp: {
+                        ...followUp,
                         name: newName.trim(),
                         phone: newPhone.trim()
-                    });
-                }
+                    }
+                })
             });
-        })
-        .catch((error) => {
-            alert('Error editing member: ' + error.message);
-        });
+        }
+        
+        // Update attendance records
+        const relatedAttendance = attendanceRecords.filter(a => a.name === oldName);
+        for (const record of relatedAttendance) {
+            await fetch(SHEETS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    action: 'updateAttendance', 
+                    id: record.id, 
+                    record: {
+                        ...record,
+                        name: newName.trim(),
+                        phone: newPhone.trim()
+                    }
+                })
+            });
+        }
+        
+        await loadMembers();
+        await loadFollowUp();
+        await loadAttendance();
+    } catch (error) {
+        alert('Error editing member: ' + error.message);
+    }
 }
 
-function editAttendance(id) {
+async function editAttendance(id) {
     const r = attendanceRecords.find(x => x.id === id);
     if (!r) return;
     
@@ -267,16 +321,22 @@ function editAttendance(id) {
     const newType = prompt('Edit Type (Visitor/Member):', r.type);
     if (newType === null) return;
     
-    database.ref('attendance/' + id).update({
-        date: newDate,
-        type: newType
-    })
-    .catch((error) => {
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'updateAttendance', 
+                id, 
+                record: { ...r, date: newDate, type: newType }
+            })
+        });
+        await loadAttendance();
+    } catch (error) {
         alert('Error editing attendance: ' + error.message);
-    });
+    }
 }
 
-function editFollowUp(id) {
+async function editFollowUp(id) {
     const f = followUpRecords.find(x => x.id === id);
     if (!f) return;
     
@@ -287,14 +347,19 @@ function editFollowUp(id) {
     const newTime = prompt('Edit Visit Time:', f.visitTime);
     if (newTime === null) return;
     
-    database.ref('followUp/' + id).update({
-        callDay: newDay,
-        visitDay: newVisit,
-        visitTime: newTime
-    })
-    .catch((error) => {
+    try {
+        await fetch(SHEETS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ 
+                action: 'updateFollowUp', 
+                id, 
+                followUp: { ...f, callDay: newDay, visitDay: newVisit, visitTime: newTime }
+            })
+        });
+        await loadFollowUp();
+    } catch (error) {
         alert('Error editing follow-up: ' + error.message);
-    });
+    }
 }
 
 // ===== STATS =====
