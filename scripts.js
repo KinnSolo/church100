@@ -1,7 +1,6 @@
 // Google Sheets Configuration
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxki5vlPmNEGIkCSL5VW8MNp1mueEETVl9EVcgY7mZBghVvjii2nbgZjVMjDTf6iriC/exec'; 
 
-
 // Data Storage
 let members = [];
 let attendanceRecords = [];
@@ -223,20 +222,30 @@ async function recordAttendance() {
     };
     
     try {
-        await fetch(SHEETS_URL, {
+        const response = await fetch(SHEETS_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'addAttendance', record })
         });
+        
+        const result = await response.json();
+        console.log('Add attendance result:', result);
+        
+        // Wait a moment for Google Sheets to process
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Reload data to show new record
         await loadAttendance();
         await loadMembers();
         
-        alert('Attendance recorded successfully!');
+        // Force re-render
+        renderAttendanceTable();
+        
+        alert('Attendance recorded successfully! Check the attendance table below.');
         
         // Keep user on Sunday Report to see the result
         showSheet('sunday-report');
     } catch (error) {
+        console.error('Full error:', error);
         alert('Error recording attendance: ' + error.message);
     }
 }
