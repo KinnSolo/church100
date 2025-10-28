@@ -1,6 +1,7 @@
 // Google Sheets Configuration
 const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxki5vlPmNEGIkCSL5VW8MNp1mueEETVl9EVcgY7mZBghVvjii2nbgZjVMjDTf6iriC/exec'; 
 
+
 // Data Storage
 let members = [];
 let attendanceRecords = [];
@@ -44,12 +45,8 @@ async function loadDataFromSheets() {
 async function loadMembers() {
     try {
         const response = await fetch(SHEETS_URL + '?action=getMembers');
-        const data = await response.json();
-        console.log('Raw members data:', data);
-        
-        members = data.filter(m => m.id && m.name);
-        console.log('Filtered members:', members);
-        
+        members = await response.json();
+        members = members.filter(m => m.id); // Filter out empty rows
         renderMembersTable();
         populateMemberDropdown();
         updateDashboard();
@@ -62,30 +59,21 @@ async function loadMembers() {
 async function loadAttendance() {
     try {
         const response = await fetch(SHEETS_URL + '?action=getAttendance');
-        const data = await response.json();
-        console.log('Raw attendance data:', data);
-        
-        attendanceRecords = data.filter(a => a.id && a.name);
-        console.log('Filtered attendance:', attendanceRecords);
-        
+        attendanceRecords = await response.json();
+        attendanceRecords = attendanceRecords.filter(a => a.id); // Filter out empty rows
         renderAttendanceTable();
         renderMonthlySummary();
         updateDashboard();
     } catch (error) {
         console.error('Error loading attendance:', error);
-        alert('Error loading attendance data. Check console for details.');
     }
 }
 
 async function loadFollowUp() {
     try {
         const response = await fetch(SHEETS_URL + '?action=getFollowUp');
-        const data = await response.json();
-        console.log('Raw follow-up data:', data);
-        
-        followUpRecords = data.filter(f => f.id && f.name);
-        console.log('Filtered follow-up:', followUpRecords);
-        
+        followUpRecords = await response.json();
+        followUpRecords = followUpRecords.filter(f => f.id); // Filter out empty rows
         renderFollowUpTable();
     } catch (error) {
         console.error('Error loading follow-up:', error);
@@ -170,43 +158,9 @@ async function recordAttendance() {
         return;
     }
 
-    let member = members.find(m => m.name === memberName);
-    
-    // If member not found and type is "Visitor", create a new member entry
-    if (!member && type === 'Visitor') {
-        const phone = prompt('Enter phone number for this visitor:');
-        if (!phone || phone.trim() === '') {
-            alert('Phone number is required to add a new visitor');
-            return;
-        }
-        
-        // Create new member for the visitor
-        const team = assignTeam();
-        const memberId = 'member_' + Date.now();
-        const newMember = { 
-            id: memberId,
-            name: memberName, 
-            phone: phone.trim(), 
-            team, 
-            dateAdded: new Date().toISOString() 
-        };
-        
-        try {
-            await fetch(SHEETS_URL, {
-                method: 'POST',
-                body: JSON.stringify({ action: 'addMember', member: newMember })
-            });
-            
-            await createFollowUpRecord(newMember);
-            await loadMembers();
-            
-            member = newMember;
-        } catch (error) {
-            alert('Error adding new member: ' + error.message);
-            return;
-        }
-    } else if (!member) {
-        alert('Member not found. Please add them in Main Entry first.');
+    const member = members.find(m => m.name === memberName);
+    if (!member) {
+        alert('Member not found');
         return;
     }
 
@@ -214,7 +168,7 @@ async function recordAttendance() {
     const record = { 
         id: recordId,
         date, 
-        name: member.name, 
+        name: memberName, 
         phone: member.phone, 
         team: member.team, 
         type,
@@ -222,30 +176,14 @@ async function recordAttendance() {
     };
     
     try {
-        const response = await fetch(SHEETS_URL, {
+        await fetch(SHEETS_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'addAttendance', record })
         });
         
-        const result = await response.json();
-        console.log('Add attendance result:', result);
-        
-        // Wait a moment for Google Sheets to process
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Reload data to show new record
         await loadAttendance();
-        await loadMembers();
-        
-        // Force re-render
-        renderAttendanceTable();
-        
-        alert('Attendance recorded successfully! Check the attendance table below.');
-        
-        // Keep user on Sunday Report to see the result
-        showSheet('sunday-report');
+        alert('Attendance recorded successfully!');
     } catch (error) {
-        console.error('Full error:', error);
         alert('Error recording attendance: ' + error.message);
     }
 }
@@ -437,40 +375,6 @@ function getMemberStatus(name) {
     return 'Regular';
 }
 
-// Check if member is at-risk (missed 3+ Sundays)
-function isAtRisk(memberName) {
-    // Get all Sundays in the last 3 weeks
-    const today = new Date();
-    const threeWeeksAgo = new Date(today);
-    threeWeeksAgo.setDate(today.getDate() - 21); // 3 weeks = 21 days
-    
-    // Get member's attendance records in the last 3 weeks
-    const recentAttendance = attendanceRecords.filter(r => {
-        const recordDate = new Date(r.date);
-        return r.name === memberName && recordDate >= threeWeeksAgo;
-    });
-    
-    // Count unique Sundays attended
-    const sundaysAttended = new Set();
-    recentAttendance.forEach(r => {
-        const recordDate = new Date(r.date);
-        // Only count Sundays
-        if (recordDate.getDay() === 0) {
-            sundaysAttended.add(r.date);
-        }
-    });
-    
-    // Count how many Sundays have passed in the last 3 weeks
-    let sundaysPassed = 0;
-    for (let d = new Date(threeWeeksAgo); d <= today; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() === 0) sundaysPassed++;
-    }
-    
-    // If 3+ Sundays have passed and member attended less than 1, they're at-risk
-    const sundaysMissed = sundaysPassed - sundaysAttended.size;
-    return sundaysMissed >= 3;
-}
-
 // ===== RENDER TABLES =====
 function renderMembersTable() {
     const searchInput = document.getElementById('memberSearch');
@@ -487,27 +391,14 @@ function renderMembersTable() {
         m.team.toLowerCase().includes(filter)
     ));
     
-    if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No members found</td></tr>';
-        return;
-    }
-    
     filtered.forEach(m => {
         const row = document.createElement('tr');
-        const atRisk = isAtRisk(m.name);
-        
-        // Highlight at-risk members in red
-        if (atRisk) {
-            row.style.backgroundColor = '#ffebee';
-            row.style.borderLeft = '4px solid #f44336';
-        }
-        
         row.innerHTML = `
-            <td>${m.name}${atRisk ? ' ⚠️' : ''}</td>
+            <td>${m.name}</td>
             <td>${m.phone}</td>
             <td>${m.team}</td>
             <td>${countAttendance(m.name)}</td>
-            <td>${atRisk ? '<span style="color: #f44336; font-weight: bold;">At Risk</span>' : getMemberStatus(m.name)}</td>
+            <td>${getMemberStatus(m.name)}</td>
             <td>
                 <button class="edit-btn" onclick="editMember('${m.id}')">✏️ Edit</button>
                 <button class="delete-btn" onclick="deleteMember('${m.id}')">🗑️ Delete</button>
@@ -523,24 +414,14 @@ function renderAttendanceTable() {
     
     tbody.innerHTML = '';
     
-    // Sort by date (newest first)
-    const sortedRecords = [...attendanceRecords].sort((a, b) => {
-        return new Date(b.date) - new Date(a.date);
-    });
-    
-    if (sortedRecords.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No attendance records yet. Add members and record their attendance.</td></tr>';
-        return;
-    }
-    
-    sortedRecords.forEach(r => {
+    attendanceRecords.forEach(r => {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${r.date || 'N/A'}</td>
-            <td>${r.name || 'N/A'}</td>
-            <td>${r.phone || 'N/A'}</td>
-            <td>${r.team || 'N/A'}</td>
-            <td>${r.type || 'N/A'}</td>
+            <td>${r.date}</td>
+            <td>${r.name}</td>
+            <td>${r.phone}</td>
+            <td>${r.team}</td>
+            <td>${r.type}</td>
             <td>${countAttendance(r.name)}</td>
         `;
         tbody.appendChild(row);
@@ -554,32 +435,19 @@ function renderFollowUpTable() {
     tbody.innerHTML = '';
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
     
-    if (followUpRecords.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No follow-up records yet</td></tr>';
-        return;
-    }
-    
     followUpRecords.forEach(f => {
         const row = document.createElement('tr');
         const isToday = f.callDay === today || f.visitDay === today;
-        const atRisk = isAtRisk(f.name);
-        
-        // Priority: At-risk takes precedence over today's follow-up
-        if (atRisk) {
-            row.style.backgroundColor = '#ffebee';
-            row.style.borderLeft = '4px solid #f44336';
-        } else if (isToday) {
-            row.style.backgroundColor = '#e3f2fd';
-        }
+        if (isToday) row.style.backgroundColor = '#e3f2fd';
         
         row.innerHTML = `
-            <td>${f.name}${atRisk ? ' ⚠️' : ''}</td>
+            <td>${f.name}</td>
             <td>${f.phone}</td>
             <td>${f.team}</td>
             <td>${f.callDay}</td>
             <td>${f.visitDay}</td>
             <td>${f.visitTime}</td>
-            <td>${atRisk ? '<span style="color: #f44336; font-weight: bold;">At Risk - Urgent!</span>' : f.status}</td>
+            <td>${f.status}</td>
         `;
         tbody.appendChild(row);
     });
@@ -592,39 +460,17 @@ function renderMonthlySummary() {
     tbody.innerHTML = '';
     
     const monthlyData = {};
-    
-    // Track unique members (souls won) - only count MEMBERS, not visitors
-    const uniqueMembers = new Set();
-    
     attendanceRecords.forEach(r => {
         const month = r.date.substring(0, 7);
         if (!monthlyData[month]) {
             monthlyData[month] = { souls: 0, visitors: 0, total: 0 };
         }
         monthlyData[month].total++;
-        
-        if (r.type === 'Visitor') {
-            // Visitors only count as visitors, NOT souls won
-            monthlyData[month].visitors++;
-        } else {
-            // Only Members count as souls won
-            // Track unique members per month
-            const key = month + '_' + r.name;
-            if (!uniqueMembers.has(key)) {
-                uniqueMembers.add(key);
-                monthlyData[month].souls++;
-            }
-        }
+        if (r.type === 'Visitor') monthlyData[month].visitors++;
+        else monthlyData[month].souls++;
     });
     
-    const sortedMonths = Object.keys(monthlyData).sort();
-    
-    if (sortedMonths.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No monthly data yet</td></tr>';
-        return;
-    }
-    
-    sortedMonths.forEach(month => {
+    Object.keys(monthlyData).sort().forEach(month => {
         const data = monthlyData[month];
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -671,9 +517,6 @@ function updateDashboard() {
     const totalVisitors = attendanceRecords.filter(r => r.type === 'Visitor').length;
     const totalAttendance = attendanceRecords.length;
     
-    // Count at-risk members
-    const atRiskCount = members.filter(m => isAtRisk(m.name)).length;
-    
     if (totalMembersElem) totalMembersElem.textContent = totalMembers;
     if (goalProgressElem) goalProgressElem.textContent = goalProgress + '%';
     if (totalVisitorsElem) totalVisitorsElem.textContent = totalVisitors;
@@ -698,44 +541,6 @@ function updateDashboard() {
     if (teamAElem) teamAElem.textContent = teamCounts['Team A'];
     if (teamBElem) teamBElem.textContent = teamCounts['Team B'];
     if (teamCElem) teamCElem.textContent = teamCounts['Team C'];
-    
-    // Show at-risk alert on dashboard if there are any
-    showAtRiskAlert(atRiskCount);
-}
-
-function showAtRiskAlert(count) {
-    // Check if alert already exists
-    let alertBox = document.getElementById('atRiskAlert');
-    
-    if (count > 0) {
-        if (!alertBox) {
-            // Create alert box if it doesn't exist
-            alertBox = document.createElement('div');
-            alertBox.id = 'atRiskAlert';
-            alertBox.style.cssText = `
-                background-color: #ffebee;
-                border: 2px solid #f44336;
-                border-radius: 8px;
-                padding: 15px;
-                margin: 20px 0;
-                color: #c62828;
-                font-weight: bold;
-                text-align: center;
-            `;
-            
-            // Insert at the top of dashboard
-            const dashboard = document.getElementById('dashboard');
-            if (dashboard) {
-                dashboard.insertBefore(alertBox, dashboard.firstChild);
-            }
-        }
-        alertBox.innerHTML = `⚠️ ALERT: ${count} member${count > 1 ? 's' : ''} at risk (missed 3+ Sundays). Check Main Entry and Follow-Up Tracker!`;
-        alertBox.style.display = 'block';
-    } else {
-        if (alertBox) {
-            alertBox.style.display = 'none';
-        }
-    }
 }
 
 function filterMembers() {
